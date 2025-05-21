@@ -294,10 +294,20 @@ resource "aws_instance" "cyperf_client" {
   }
 }
 
-output "cyperf_server_ip" {
+output "CYPERF_SERVER_IP" {
   value = aws_instance.cyperf_server.public_ip
 }
 
-output "cyperf_client_ip" {
+output "CYPERF_CLIENT_IP" {
   value = aws_instance.cyperf_client.public_ip
+}
+
+output "CYPERF_SERVER_PRIVATE_IP" {
+  description = "Private IP of the Cyperf Server in us-east-1"
+  value       = aws_instance.cyperf_server.private_ip
+}
+
+output "CYPERF_CLIENT_PRIVATE_IP" {
+  description = "Private IP of the Cyperf Client in us-west-2"
+  value       = aws_instance.cyperf_client.private_ip
 }
