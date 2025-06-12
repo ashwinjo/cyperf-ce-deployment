@@ -1,6 +1,8 @@
 import paramiko
 from typing import Dict, Any
 from app.core.config import settings
+import re
+import csv
 
 class CyperfService:
     def __init__(self):
@@ -17,7 +19,7 @@ class CyperfService:
         return ssh
 
     def start_server(self, test_id: str, params: Dict[str, Any]) -> Dict[str, Any]:
-        command = f"sudo cyperf -s"
+        command = f"nohup sudo cyperf -s"
         if params.get("cps"):
             command += " --cps"
         if params.get("port"):
@@ -26,7 +28,8 @@ class CyperfService:
             command += f" --length {params['length']}"
         if params.get("csv_stats"):
             command += " --csv-stats"
-        command += f" > {test_id}_server.log 2>&1 &"
+        command += f" {test_id}_server.csv > {test_id}_server.log 2>&1 &"
+        print(command)
         ssh = self._connect_ssh(settings.SERVER_IP)
         ssh.exec_command(command)
         find_cmd = "ps -ef | grep 'cyperf -s' | grep root | awk '{print $2}'"
@@ -35,7 +38,7 @@ class CyperfService:
         server_pid = int(pids[0]) if pids and pids[0] else None
         self.active_tests[test_id] = {
             "server_pid": server_pid,
-            "server_log_path": f"{test_id}_server.log",
+            "command": command,
             "server_csv_path": f"{test_id}_server.csv"
         }
         ssh.close()
@@ -44,7 +47,7 @@ class CyperfService:
     def start_client(self, test_id: str, server_ip: str, params: Dict[str, Any]) -> Dict[str, Any]:
         if test_id not in self.active_tests:
             raise Exception("Server not started for this test_id")
-        command = f"sudo cyperf -c {server_ip}"
+        command = f"nohup sudo cyperf -c {server_ip}"
         if params.get("cps"):
             command += f" --cps {params['cps']}"
         if params.get("port"):
@@ -57,15 +60,15 @@ class CyperfService:
             command += f" --bitrate {params['bitrate']}"
         if params.get("parallel"):
             command += f" --parallel {params['parallel']}"
-        if params.get("csv_stats"):
-            command += " --csv-stats"
         if params.get("reverse"):
             command += " --reverse"
         if params.get("bidi"):
             command += " --bidir"
         if params.get("interval"):
             command += f" --interval {params['interval']}"
-        command += f" > {test_id}_client.log 2>&1 &"
+        if params.get("csv_stats"):
+            command += " --csv-stats"
+        command += f" {test_id}_client.csv > {test_id}_client.log 2>&1 &"    
         ssh = self._connect_ssh(settings.CLIENT_IP)
         ssh.exec_command(command)
         find_cmd = "ps -ef | grep 'cyperf -c' | grep root | awk '{print $2}'"
@@ -76,36 +79,55 @@ class CyperfService:
         self.active_tests[test_id]["client_log_path"] = f"{test_id}_client.log"
         self.active_tests[test_id]["client_csv_path"] = f"{test_id}_client.csv"
         ssh.close()
-        return {"client_pid": client_pid}
+        return {"client_pid": client_pid, 
+                "command": command, 
+                "client_csv_path": f"{test_id}_client.csv"}
 
-    def stop_test(self, test_id: str) -> Dict[str, Any]:
-        if test_id not in self.active_tests:
-            raise Exception("Test not found")
-        test_info = self.active_tests[test_id]
-        if test_info.get("server_pid"):
-            ssh = self._connect_ssh(settings.SERVER_IP)
-            ssh.exec_command(f"sudo kill -9 {test_info['server_pid']}")
-            ssh.close()
-        if test_info.get("client_pid"):
-            ssh = self._connect_ssh(settings.CLIENT_IP)
-            ssh.exec_command(f"sudo kill -9 {test_info['client_pid']}")
-            ssh.close()
-        return test_info
-
-    def get_server_stats(self, test_id: str) -> str:
-        if test_id not in self.active_tests:
-            raise Exception("Test not found")
+    def stop_server(self) -> Dict[str, Any]:
         ssh = self._connect_ssh(settings.SERVER_IP)
-        _, stdout, _ = ssh.exec_command(f"tail -n 50 {self.active_tests[test_id]['server_log_path']}")
-        output = stdout.read().decode()
+        pids = "sudo ps aux | grep -i \"[c]yperf\|[s]erver\" | awk '{print $2}'"
+        ssh.exec_command(pids)
+        kill_cmd = "sudo ps aux | grep -i \"[c]yperf\|[s]erver\" | awk '{print $2}' | sudo xargs kill -9"
+        ssh.exec_command(kill_cmd)
         ssh.close()
+        return {"cyperf_server_pids_killed": "true"}
+        
+    def get_server_stats(self, test_id: str):
+        if test_id not in self.active_tests:
+            raise Exception("Test not found")
+        output = self.read_server_csv_stats(test_id)
         return output
 
     def get_client_stats(self, test_id: str) -> str:
         if test_id not in self.active_tests:
             raise Exception("Test not found")
-        ssh = self._connect_ssh(settings.CLIENT_IP)
-        _, stdout, _ = ssh.exec_command(f"tail -n 50 {self.active_tests[test_id]['client_log_path']}")
-        output = stdout.read().decode()
-        ssh.close()
+        output = self.read_client_csv_stats(test_id)
         return output
+
+    def read_client_csv_stats(self, test_id: str) -> list:
+        csv_path = f"{test_id}_client.csv"
+        stats = []
+        ssh = self._connect_ssh(settings.CLIENT_IP)
+        sftp = ssh.open_sftp()
+        with sftp.open(csv_path, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                stats.append(row)
+        sftp.close()
+        ssh.close()
+        return stats
+
+    def read_server_csv_stats(self, test_id: str) -> list:
+        csv_path = f"{test_id}_server.csv"
+        stats = []
+        ssh = self._connect_ssh(settings.SERVER_IP)
+        sftp = ssh.open_sftp()
+        with sftp.open(csv_path, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                stats.append(row)
+        sftp.close()
+        ssh.close()
+        return stats
+
+
