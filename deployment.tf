@@ -7,13 +7,35 @@ terraform {
   }
 }
 
+# Data sources for availability zones
+data "aws_availability_zones" "primary" {
+  provider = aws.primary
+  state    = "available"
+}
+
+data "aws_availability_zones" "secondary" {
+  provider = aws.secondary
+  state    = "available"
+}
+
 provider "aws" {
-  region = "us-east-1"
+  region = var.primary_region
+  alias  = "primary"
+}
+
+provider "aws" {
+  region = var.secondary_region
+  alias  = "secondary"
+}
+
+# Temporary providers for destroying orphaned resources
+provider "aws" {
+  region = var.primary_region
   alias  = "us-east-1"
 }
 
 provider "aws" {
-  region = "us-west-2"
+  region = var.secondary_region
   alias  = "us-west-2"
 }
 
@@ -21,130 +43,130 @@ provider "aws" {
 # VPCs, Subnets, and IGWs
 ##############################
 
-resource "aws_vpc" "east_vpc" {
-  provider = aws.us-east-1
-  cidr_block = "10.0.0.0/16"
+resource "aws_vpc" "primary_vpc" {
+  provider   = aws.primary
+  cidr_block = var.primary_vpc_cidr
   tags = {
-    Name = "east-vpc"
+    Name = "${var.primary_region}-vpc"
   }
 }
 
-resource "aws_subnet" "east_subnet" {
-  provider = aws.us-east-1
-  vpc_id     = aws_vpc.east_vpc.id
-  cidr_block = "10.0.1.0/24"
-  availability_zone = "us-east-1a"
+resource "aws_subnet" "primary_subnet" {
+  provider          = aws.primary
+  vpc_id            = aws_vpc.primary_vpc.id
+  cidr_block        = var.primary_subnet_cidr
+  availability_zone = data.aws_availability_zones.primary.names[0]
   tags = {
-    Name = "east-subnet"
+    Name = "${var.primary_region}-subnet"
   }
 }
 
-resource "aws_internet_gateway" "east_igw" {
-  provider = aws.us-east-1
-  vpc_id = aws_vpc.east_vpc.id
+resource "aws_internet_gateway" "primary_igw" {
+  provider = aws.primary
+  vpc_id = aws_vpc.primary_vpc.id
   tags = {
-    Name = "east-igw"
+    Name = "${var.primary_region}-igw"
   }
 }
 
-resource "aws_route_table" "east_rt" {
-  provider = aws.us-east-1
-  vpc_id = aws_vpc.east_vpc.id
+resource "aws_route_table" "primary_rt" {
+  provider = aws.primary
+  vpc_id = aws_vpc.primary_vpc.id
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.east_igw.id
+    gateway_id = aws_internet_gateway.primary_igw.id
   }
   tags = {
-    Name = "east-rt"
+    Name = "${var.primary_region}-rt"
   }
 }
 
-resource "aws_route_table_association" "east_rta" {
-  provider       = aws.us-east-1
-  subnet_id      = aws_subnet.east_subnet.id
-  route_table_id = aws_route_table.east_rt.id
+resource "aws_route_table_association" "primary_rta" {
+  provider       = aws.primary
+  subnet_id      = aws_subnet.primary_subnet.id
+  route_table_id = aws_route_table.primary_rt.id
 }
 
-resource "aws_vpc" "west_vpc" {
-  provider = aws.us-west-2
-  cidr_block = "10.1.0.0/16"
+resource "aws_vpc" "secondary_vpc" {
+  provider   = aws.secondary
+  cidr_block = var.secondary_vpc_cidr
   tags = {
-    Name = "west-vpc"
+    Name = "${var.secondary_region}-vpc"
   }
 }
 
-resource "aws_subnet" "west_subnet" {
-  provider = aws.us-west-2
-  vpc_id     = aws_vpc.west_vpc.id
-  cidr_block = "10.1.1.0/24"
-  availability_zone = "us-west-2a"
+resource "aws_subnet" "secondary_subnet" {
+  provider          = aws.secondary
+  vpc_id            = aws_vpc.secondary_vpc.id
+  cidr_block        = var.secondary_subnet_cidr
+  availability_zone = data.aws_availability_zones.secondary.names[0]
   tags = {
-    Name = "west-subnet"
+    Name = "${var.secondary_region}-subnet"
   }
 }
 
-resource "aws_internet_gateway" "west_igw" {
-  provider = aws.us-west-2
-  vpc_id = aws_vpc.west_vpc.id
+resource "aws_internet_gateway" "secondary_igw" {
+  provider = aws.secondary
+  vpc_id = aws_vpc.secondary_vpc.id
   tags = {
-    Name = "west-igw"
+    Name = "${var.secondary_region}-igw"
   }
 }
 
-resource "aws_route_table" "west_rt" {
-  provider = aws.us-west-2
-  vpc_id = aws_vpc.west_vpc.id
+resource "aws_route_table" "secondary_rt" {
+  provider = aws.secondary
+  vpc_id = aws_vpc.secondary_vpc.id
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.west_igw.id
+    gateway_id = aws_internet_gateway.secondary_igw.id
   }
   tags = {
-    Name = "west-rt"
+    Name = "${var.secondary_region}-rt"
   }
 }
 
-resource "aws_route_table_association" "west_rta" {
-  provider       = aws.us-west-2
-  subnet_id      = aws_subnet.west_subnet.id
-  route_table_id = aws_route_table.west_rt.id
+resource "aws_route_table_association" "secondary_rta" {
+  provider       = aws.secondary
+  subnet_id      = aws_subnet.secondary_subnet.id
+  route_table_id = aws_route_table.secondary_rt.id
 }
 
 ##############################
 # VPC Peering and Routing
 ##############################
 
-resource "aws_vpc_peering_connection" "east_to_west" {
-  provider      = aws.us-east-1
-  vpc_id        = aws_vpc.east_vpc.id
-  peer_vpc_id   = aws_vpc.west_vpc.id
-  peer_region   = "us-west-2"
+resource "aws_vpc_peering_connection" "primary_to_secondary" {
+  provider      = aws.primary
+  vpc_id        = aws_vpc.primary_vpc.id
+  peer_vpc_id   = aws_vpc.secondary_vpc.id
+  peer_region   = var.secondary_region
   auto_accept   = false
   tags = {
-    Name = "east-to-west-peering"
+    Name = "primary-to-secondary-peering"
   }
 }
 
-resource "aws_vpc_peering_connection_accepter" "west_accept" {
-  provider                  = aws.us-west-2
-  vpc_peering_connection_id = aws_vpc_peering_connection.east_to_west.id
+resource "aws_vpc_peering_connection_accepter" "secondary_accept" {
+  provider                  = aws.secondary
+  vpc_peering_connection_id = aws_vpc_peering_connection.primary_to_secondary.id
   auto_accept               = true
   tags = {
-    Name = "west-accept-peering"
+    Name = "secondary-accept-peering"
   }
 }
 
-resource "aws_route" "east_to_west_route" {
-  provider                  = aws.us-east-1
-  route_table_id            = aws_route_table.east_rt.id
-  destination_cidr_block    = aws_vpc.west_vpc.cidr_block
-  vpc_peering_connection_id = aws_vpc_peering_connection.east_to_west.id
+resource "aws_route" "primary_to_secondary_route" {
+  provider                  = aws.primary
+  route_table_id            = aws_route_table.primary_rt.id
+  destination_cidr_block    = aws_vpc.secondary_vpc.cidr_block
+  vpc_peering_connection_id = aws_vpc_peering_connection.primary_to_secondary.id
 }
 
-resource "aws_route" "west_to_east_route" {
-  provider                  = aws.us-west-2
-  route_table_id            = aws_route_table.west_rt.id
-  destination_cidr_block    = aws_vpc.east_vpc.cidr_block
-  vpc_peering_connection_id = aws_vpc_peering_connection.east_to_west.id
+resource "aws_route" "secondary_to_primary_route" {
+  provider                  = aws.secondary
+  route_table_id            = aws_route_table.secondary_rt.id
+  destination_cidr_block    = aws_vpc.primary_vpc.cidr_block
+  vpc_peering_connection_id = aws_vpc_peering_connection.primary_to_secondary.id
 }
 
 ##############################
@@ -152,7 +174,7 @@ resource "aws_route" "west_to_east_route" {
 ##############################
 
 data "aws_ami" "ubuntu_server" {
-  provider = aws.us-east-1
+  provider = aws.primary
   most_recent = true
   owners      = ["099720109477"]
   filter {
@@ -166,7 +188,7 @@ data "aws_ami" "ubuntu_server" {
 }
 
 data "aws_ami" "ubuntu_client" {
-  provider = aws.us-west-2
+  provider = aws.secondary
   most_recent = true
   owners      = ["099720109477"]
   filter {
@@ -184,9 +206,9 @@ data "aws_ami" "ubuntu_client" {
 ##############################
 
 resource "aws_security_group" "cyperf_server_sg" {
-  provider = aws.us-east-1
+  provider = aws.primary
   name        = "cyperf-server-sg"
-  vpc_id      = aws_vpc.east_vpc.id
+  vpc_id      = aws_vpc.primary_vpc.id
   description = "SG for Cyperf Server"
 
   ingress {
@@ -223,9 +245,9 @@ resource "aws_security_group" "cyperf_server_sg" {
 }
 
 resource "aws_security_group" "cyperf_client_sg" {
-  provider = aws.us-west-2
+  provider = aws.secondary
   name        = "cyperf-client-sg"
-  vpc_id      = aws_vpc.west_vpc.id
+  vpc_id      = aws_vpc.secondary_vpc.id
   description = "SG for Cyperf Client"
 
   ingress {
@@ -266,48 +288,30 @@ resource "aws_security_group" "cyperf_client_sg" {
 ##############################
 
 resource "aws_instance" "cyperf_server" {
-  provider = aws.us-east-1
-  ami           = data.aws_ami.ubuntu_server.id
-  instance_type = "c5n.2xlarge"
-  subnet_id     = aws_subnet.east_subnet.id
-  key_name      = "vibecode"
+  provider                    = aws.primary
+  ami                        = data.aws_ami.ubuntu_server.id
+  instance_type              = var.instance_type
+  subnet_id                  = aws_subnet.primary_subnet.id
+  key_name                   = var.key_name
   associate_public_ip_address = true
-  vpc_security_group_ids = [aws_security_group.cyperf_server_sg.id]
-  user_data = file("userdata.sh")
+  vpc_security_group_ids     = [aws_security_group.cyperf_server_sg.id]
+  user_data                  = file("userdata.sh")
   tags = {
-    Name = "Cyperf-Server"
+    Name = "Cyperf-Server-${var.primary_region}"
   }
 }
 
 resource "aws_instance" "cyperf_client" {
-  provider = aws.us-west-2
-  ami           = data.aws_ami.ubuntu_client.id
-  instance_type = "c5n.2xlarge"
-  subnet_id     = aws_subnet.west_subnet.id
-  key_name      = "vibecode"
+  provider                    = aws.secondary
+  ami                        = data.aws_ami.ubuntu_client.id
+  instance_type              = var.instance_type
+  subnet_id                  = aws_subnet.secondary_subnet.id
+  key_name                   = var.key_name
   associate_public_ip_address = true
-  vpc_security_group_ids = [aws_security_group.cyperf_client_sg.id]
-  user_data = file("userdata.sh")
-
+  vpc_security_group_ids     = [aws_security_group.cyperf_client_sg.id]
+  user_data                  = file("userdata.sh")
   tags = {
-    Name = "Cyperf-Client"
+    Name = "Cyperf-Client-${var.secondary_region}"
   }
 }
 
-output "CYPERF_SERVER_IP" {
-  value = aws_instance.cyperf_server.public_ip
-}
-
-output "CYPERF_CLIENT_IP" {
-  value = aws_instance.cyperf_client.public_ip
-}
-
-output "CYPERF_SERVER_PRIVATE_IP" {
-  description = "Private IP of the Cyperf Server in us-east-1"
-  value       = aws_instance.cyperf_server.private_ip
-}
-
-output "CYPERF_CLIENT_PRIVATE_IP" {
-  description = "Private IP of the Cyperf Client in us-west-2"
-  value       = aws_instance.cyperf_client.private_ip
-}

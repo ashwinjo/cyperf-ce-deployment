@@ -1,0 +1,83 @@
+# Cyperf CE Deployment - Command Line Usage Examples
+# 
+# This configuration has been optimized for command-line argument passing.
+# You can deploy using either the deploy.sh script or direct terraform commands.
+
+# =============================================================================
+# METHOD 1: Environment Variables + Terraform Commands (RECOMMENDED)
+# =============================================================================
+
+# Set AWS credentials as environment variables:
+# export AWS_ACCESS_KEY_ID="your-access-key"
+# export AWS_SECRET_ACCESS_KEY="your-secret-key"
+# export AWS_DEFAULT_REGION="us-east-1"
+
+# Basic deployment:
+# terraform plan -var="primary_region=us-east-1" -var="secondary_region=us-west-2" -var="instance_type=c5n.2xlarge" -var="key_name=my-key"
+# terraform apply -var="primary_region=us-east-1" -var="secondary_region=us-west-2" -var="instance_type=c5n.2xlarge" -var="key_name=my-key"
+
+# One-liner alternative:
+# AWS_ACCESS_KEY_ID="key" AWS_SECRET_ACCESS_KEY="secret" terraform apply -var="primary_region=us-east-1" -var="secondary_region=us-west-2" -var="instance_type=c5n.2xlarge" -var="key_name=my-key"
+
+# =============================================================================
+# METHOD 2: Using the deploy.sh script
+# =============================================================================
+
+# Note: Still requires AWS credentials as environment variables:
+# export AWS_ACCESS_KEY_ID="your-access-key"
+# export AWS_SECRET_ACCESS_KEY="your-secret-key"
+
+# Basic deployment (plan only):
+# ./deploy.sh -p us-east-1 -s us-west-2 -i c5n.2xlarge -k my-key
+
+# Deploy to production:
+# ./deploy.sh -a apply -p us-east-1 -s us-west-2 -i c5n.2xlarge -k my-key
+
+# European deployment:
+# ./deploy.sh -a apply -p eu-west-1 -s eu-central-1 -i c5n.xlarge -k eu-key
+
+# Asia Pacific deployment:
+# ./deploy.sh -a apply -p ap-southeast-1 -s ap-northeast-1 -i c5n.2xlarge -k apac-key
+
+# Custom VPC CIDRs:
+# ./deploy.sh -p us-east-1 -s us-west-2 -i c5n.2xlarge -k my-key \
+#   --primary-vpc-cidr 172.16.0.0/16 --secondary-vpc-cidr 172.17.0.0/16
+
+# Destroy infrastructure:
+# ./deploy.sh -a destroy -p us-east-1 -s us-west-2 -i c5n.2xlarge -k my-key
+
+# =============================================================================
+# METHOD 3: Traditional tfvars file (if you prefer)
+# =============================================================================
+# Copy this section to terraform.tfvars if you want to use file-based variables
+# Note: You'll still need AWS credentials as environment variables
+
+# Required variables (no defaults):
+# primary_region   = "us-east-1"
+# secondary_region = "us-west-2"
+# instance_type    = "c5n.2xlarge"
+# key_name         = "my-key"
+
+# Optional variables (have defaults):
+# primary_vpc_cidr      = "10.0.0.0/16"
+# secondary_vpc_cidr    = "10.1.0.0/16"
+# primary_subnet_cidr   = "10.0.1.0/24"
+# secondary_subnet_cidr = "10.1.1.0/24"
+
+
+# =============================================================================
+# Instance Type Options
+# =============================================================================
+# c5n.large      # 2 vCPUs, 5.25 GB RAM  - Development/testing
+# c5n.xlarge     # 4 vCPUs, 10.5 GB RAM  - Small workloads
+# c5n.2xlarge    # 8 vCPUs, 21 GB RAM    - Standard (default)
+# c5n.4xlarge    # 16 vCPUs, 42 GB RAM   - High performance
+# c5n.9xlarge    # 36 vCPUs, 96 GB RAM   - Maximum performance
+
+# =============================================================================
+# Common AWS Regions
+# =============================================================================
+# US East:      us-east-1, us-east-2
+# US West:      us-west-1, us-west-2
+# Europe:       eu-west-1, eu-central-1, eu-north-1
+# Asia Pacific: ap-southeast-1, ap-northeast-1, ap-south-1
