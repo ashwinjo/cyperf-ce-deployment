@@ -63,44 +63,6 @@ terraform apply \
   -var="key_name=your-key-name"
 ```
 
-## Common Deployment Examples
-
-### US Cross-Coast
-```bash
-export AWS_ACCESS_KEY_ID="your-access-key"
-export AWS_SECRET_ACCESS_KEY="your-secret-key"
-
-terraform apply \
-  -var="primary_region=us-east-1" \
-  -var="secondary_region=us-west-2" \
-  -var="instance_type=c5n.2xlarge" \
-  -var="key_name=us-key"
-```
-
-### European Regions
-```bash
-export AWS_ACCESS_KEY_ID="your-access-key"
-export AWS_SECRET_ACCESS_KEY="your-secret-key"
-
-terraform apply \
-  -var="primary_region=eu-west-1" \
-  -var="secondary_region=eu-central-1" \
-  -var="instance_type=c5n.xlarge" \
-  -var="key_name=eu-key"
-```
-
-### Asia Pacific
-```bash
-export AWS_ACCESS_KEY_ID="your-access-key"
-export AWS_SECRET_ACCESS_KEY="your-secret-key"
-
-terraform apply \
-  -var="primary_region=ap-southeast-1" \
-  -var="secondary_region=ap-northeast-1" \
-  -var="instance_type=c5n.2xlarge" \
-  -var="key_name=apac-key"
-```
-
 ## Required Parameters
 
 | Parameter | Description | Example |
@@ -139,24 +101,3 @@ aws ec2 describe-key-pairs --region us-east-1
 unset AWS_ACCESS_KEY_ID
 unset AWS_SECRET_ACCESS_KEY
 ```
-
----
-
-**That's it!** You now have Cyperf CE deployed across two AWS regions with VPC peering for network performance testing.
-
-
-# 1. Start the server
-python3 terraform_api.py
-
-# 2. Plan deployment
-curl -X POST http://localhost:5000/terraform/plan \
-  -H "Content-Type: application/json" \
-  -d '{"aws_access_key_id":"YOUR_KEY","aws_secret_access_key":"YOUR_SECRET","primary_region":"us-east-1","secondary_region":"us-west-2","instance_type":"c5n.2xlarge","key_name":"vibecode"}'
-
-# 3. Check status (use operation_id from response)
-curl -X GET http://localhost:5000/terraform/status/plan_1703123456
-
-# 4. Apply if plan looks good
-curl -X POST http://localhost:5000/terraform/apply \
-  -H "Content-Type: application/json" \
-  -d '{"aws_access_key_id":"YOUR_KEY","aws_secret_access_key":"YOUR_SECRET","primary_region":"us-east-1","secondary_region":"us-west-2","instance_type":"c5n.2xlarge","key_name":"vibecode"}'

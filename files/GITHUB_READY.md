@@ -9,8 +9,8 @@ All AWS credentials have been replaced with placeholders in:
 - ✅ `DOCKER_N8N_SETUP.md`
 - ✅ `n8n-workflow-example.json`
 
-**Before:** `YOUR_AWS_ACCESS_KEY_ID` → **After:** `YOUR_AWS_ACCESS_KEY_ID`
-**Before:** `YOUR_AWS_SECRET_ACCESS_KEY` → **After:** `YOUR_AWS_SECRET_ACCESS_KEY`
+**Before:** `AKIA[REDACTED]` → **After:** `YOUR_AWS_ACCESS_KEY_ID`
+**Before:** `[REDACTED_SECRET_KEY]` → **After:** `YOUR_AWS_SECRET_ACCESS_KEY`
 
 ### 🛡️ **Protection Added**
 - ✅ **`.gitignore`** - Prevents committing sensitive files
